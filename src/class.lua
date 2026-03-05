@@ -35,15 +35,14 @@ local function mergeTable(base, addition, deep)
 end
 
 --- This function is used to create a new class. It can be used to create a class that extends another class by passing the parent class as an argument.
---- @param extendsStatic table|nil The static class to extend, or nil to create a new class.
 --- @param extends table|nil The class to extend, or nil to create a new class.
 --- @return table, table The static class with constructor and the class metatable.
-local function class(extendsStatic, extends)
+local function class(extends)
     local cls = {}
     local static = {}
 
-    if (extendsStatic ~= nil) and (extends ~= nil) then
-        static = copy(extendsStatic, true)
+    if (extends ~= nil) then
+        static = copy(extends, true)
     end
 
     --- Creates a new class
@@ -56,8 +55,8 @@ local function class(extendsStatic, extends)
     --- @return table The new class
     function static:super(...)
         local out = {}
-        if (extendsStatic ~= nil) and (extends ~= nil) then
-            out = extendsStatic:new(...)
+        if (extends ~= nil) then
+            out = extends:new(...)
         end
         mergeTable(out, cls, true)
         return out
@@ -76,7 +75,7 @@ function animalClass:getName()
     return self.name
 end
 
-local dog, dogClass = class(animal, animalClass)
+local dog, dogClass = class(animal)
 function dog:new(name)
     local cls = self:super(name)
     return cls
@@ -85,7 +84,7 @@ function dogClass:say()
     print("Woof!")
 end
 
-local cat, catClass = class(animal, animalClass)
+local cat, catClass = class(animal)
 function cat:new(name)
     local cls = self:super(name)
     return cls
