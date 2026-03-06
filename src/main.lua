@@ -38,6 +38,10 @@ function task:new(func)
         id = nil
     }
     cls.eventQueue = {}
+    cls.returned = {
+        is = false,
+        values = {}
+    }
     return cls
 end
 
@@ -98,6 +102,21 @@ end
 --- @param event table
 function taskClass:queueEvent(event)
     table.insert(self.eventQueue, event)
+end
+
+--- Returns whatever the task function returned.
+---@return table|nil The returned values of the task function or nil if the task hasn't returned yet
+function taskClass:getReturned()
+    if self.returned.is then
+        return self.returned.values
+    end
+end
+
+--- Sets the returned values of the task function
+---@param values table
+function taskClass:setReturned(values)
+    self.returned.is = true
+    self.returned.values = values
 end
 
 --- Gets the next event from the event queue of the task
@@ -263,8 +282,12 @@ function desynccClass:promise(func)
     table.insert(self.promises, prom)
     table.insert(self.tasks, prom:getTask())
     return {
-        after = prom.after,
-        catch = prom.catch,
+        after = function (...)
+            prom:after(...)
+        end,
+        catch = function (...)
+            prom:catch(...)
+        end,
         await = function ()
             self.tasks[1]:waitForPromise(prom:getId())
             while true do
@@ -275,6 +298,9 @@ function desynccClass:promise(func)
                     error("Promise rejected: " .. table.concat(data, ", ", 2))
                 end
             end
+        end,
+        getResult = function ()
+            return prom:getOutcome()
         end
     }
 end
@@ -317,28 +343,31 @@ end
 function desynccClass:resumeTask(id)
     for k, v in ipairs(self.tasks) do
         if v:getId() == id then
-            local event = v:getNextEvent(false)
-            if event ~= nil then
-                --[[print("Events for task",k)
-                for k,v in ipairs(v.eventQueue) do
-                    print(textutils.serialise(v))
-                end
-                print("------------------")
-                print("Executing event", event[1], "for task",k)]]
-                v:clearWait()
-                local success, err = coroutine.resume(v.coroutine, table.unpack(event))
-                if not success then
-                    error("Error in task " .. v.id .. ": " .. err)
-                end
-                if err then
-                    v:waitForEvent(err)
-                end
-                --print("Task",k,"returned with",err)
-                if coroutine.status(v.coroutine) == "dead" then
-                    --print("Task",k,v:getId(),"finished")
-                    table.remove(self.tasks, k)
-                    if k == 1 then
-                        return true
+            if v:getReturned() == nil then
+                local event = v:getNextEvent(false)
+                if event ~= nil then
+                    --[[print("Events for task",k)
+                    for k,v in ipairs(v.eventQueue) do
+                        print(textutils.serialise(v))
+                    end
+                    print("------------------")
+                    print("Executing event", event[1], "for task",k)]]
+                    v:clearWait()
+                    local res = { coroutine.resume(v.coroutine, table.unpack(event)) }
+                    if not res[1] then
+                        error("Error in task " .. v.id .. ": " .. res[2])
+                    end
+                    --print("Task",k,"returned with",err)
+                    if coroutine.status(v.coroutine) == "dead" then
+                        --print("Task",k,v:getId(),"finished")
+                        v:setReturned({ table.unpack(res, 2) })
+                        if k == 1 then
+                            return true
+                        end
+                    else
+                        if res[2] then
+                            v:waitForEvent(res[2])
+                        end
                     end
                 end
             end
@@ -364,46 +393,49 @@ function desynccClass:start(func)
             break
         end
         for k, v in ipairs(self.tasks) do
-            local wait = v:getWaiting()
-            if wait == nil then
-                if event[1] ~= "desyncc_tick" then
-                    --print("Queuing for task: ", k)
-                    v:queueEvent(event)
-                end
-            else
-                if event[1] ~= "desyncc_tick" then
-                    --print("Task",k,"is waiting for",textutils.serialise(wait))
-                end
-                if wait.typ == "task" then
-                    if self:getTask(wait.id) == nil then
-                        v:queueEvent({ "desyncc_task_finished" })
-                        if event[1] ~= "desyncc_tick" then
-                            --print("Queuing for task (waiting for task): ", k)
-                            v:queueEvent(event)
+            if v:getReturned() == nil then
+                local wait = v:getWaiting()
+                if wait == nil then
+                    if event[1] ~= "desyncc_tick" then
+                        --print("Queuing for task: ", k)
+                        v:queueEvent(event)
+                    end
+                else
+                    if event[1] ~= "desyncc_tick" then
+                        --print("Task",k,"is waiting for",textutils.serialise(wait))
+                    end
+                    if wait.typ == "task" then
+                        local ret = v:getReturned()
+                        if ret ~= nil then
+                            v:queueEvent({ "desyncc_task_finished", table.unpack(ret) })
+                            if event[1] ~= "desyncc_tick" then
+                                --print("Queuing for task (waiting for task): ", k)
+                                v:queueEvent(event)
+                            end
+                        end
+                    elseif wait.typ == "promise" then
+                        local outcome = { self:getPromise(wait.id):getOutcome() }
+                        if outcome[1] ~= nil then
+                            outcome[1] = "desyncc_promise_" .. outcome[1]
+                            v:queueEvent(outcome)
+                            if event[1] ~= "desyncc_tick" then
+                                --print("Queuing for task (waiting for promise): ", k)
+                                v:queueEvent(event)
+                            end
+                        end
+                    elseif wait.typ == "event" then
+                        if event[1] == wait.id then
+                            if event[1] ~= "desyncc_tick" then
+                                --print("Queuing for task (waiting for event): ", k)
+                                v:queueEvent(event)
+                            end
                         end
                     end
-                elseif wait.typ == "promise" then
-                    local outcome = { self:getPromise(wait.id):getOutcome() }
-                    if outcome[1] ~= nil then
-                        outcome[1] = "desyncc_promise_" .. outcome[1]
-                        v:queueEvent(outcome)
-                        if event[1] ~= "desyncc_tick" then
-                            --print("Queuing for task (waiting for promise): ", k)
-                            v:queueEvent(event)
-                        end
-                    end
-                elseif wait.typ == "event" then
-                    if event[1] == wait.id then
-                        if event[1] ~= "desyncc_tick" then
-                            --print("Queuing for task (waiting for event): ", k)
-                            v:queueEvent(event)
-                        end
-                    end
                 end
-            end
-            local die = self:resumeTask(v:getId())
-            if die then
-                error("Main task died")
+                local die = self:resumeTask(v:getId())
+                if die then
+                    error("Main task died")
+                end 
             end
         end
     end
