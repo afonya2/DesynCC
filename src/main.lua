@@ -75,7 +75,7 @@ function taskClass:waitForPromise(id)
     }
 end
 
---- Sets the event to wait for an event
+--- Sets the task to wait for an event
 --- @param id string The name of the event to wait for
 function taskClass:waitForEvent(id)
     self.waitingFor = {
@@ -94,16 +94,42 @@ function taskClass:clearWait()
     }
 end
 
---- Adds an event to the event queue for the task
+--- Adds an event to the event queue of the task
 --- @param event table
 function taskClass:queueEvent(event)
     table.insert(self.eventQueue, event)
 end
 
---- Gets the next event from the event queue for the task
---- @return table
-function taskClass:getNextEvent()
-    return table.remove(self.eventQueue, 1)
+--- Gets the next event from the event queue of the task
+--- @param noCheckWait boolean Whether to ignore the wait state of the task or not
+--- @return table|nil
+function taskClass:getNextEvent(noCheckWait)
+    local wait = self:getWaiting()
+    if noCheckWait or not wait then
+        return table.remove(self.eventQueue, 1)
+    end
+    while #self.eventQueue > 0 do
+        local v = self.eventQueue[1]
+        if wait.typ == "task" then
+            if v[1] == "desyncc_task_finished" then
+                return table.remove(self.eventQueue, 1)
+            end
+        elseif wait.typ == "promise" then
+            if (v[1] == "desyncc_promise_rejected") or (v[1] == "desyncc_promise_resolved") then
+                return table.remove(self.eventQueue, 1)
+            end
+        elseif wait.typ == "event" then
+            if v[1] == wait.id then
+                return table.remove(self.eventQueue, 1)
+            end
+        end
+        table.remove(self.eventQueue, 1)
+    end
+end
+
+--- Clears the event queue of the task
+function taskClass:clearEventQueue()
+    self.eventQueue = {}
 end
 
 local promise, promiseClass = class()
@@ -241,8 +267,14 @@ function desynccClass:promise(func)
         catch = prom.catch,
         await = function ()
             self.tasks[1]:waitForPromise(prom:getId())
-            local data = { coroutine.yield() }
-            return table.unpack(data)
+            while true do
+                local data = { coroutine.yield() }
+                if data[1] == "desyncc_promise_resolved" then
+                    return table.unpack(data)
+                elseif data[1] == "desyncc_promise_rejected" then
+                    error("Promise rejected: " .. table.concat(data, ", ", 2))
+                end
+            end
         end
     }
 end
@@ -285,13 +317,25 @@ end
 function desynccClass:resumeTask(id)
     for k, v in ipairs(self.tasks) do
         if v:getId() == id then
-            local event = v:getNextEvent()
+            local event = v:getNextEvent(false)
             if event ~= nil then
+                --[[print("Events for task",k)
+                for k,v in ipairs(v.eventQueue) do
+                    print(textutils.serialise(v))
+                end
+                print("------------------")
+                print("Executing event", event[1], "for task",k)]]
+                v:clearWait()
                 local success, err = coroutine.resume(v.coroutine, table.unpack(event))
                 if not success then
                     error("Error in task " .. v.id .. ": " .. err)
                 end
+                if err then
+                    v:waitForEvent(err)
+                end
+                --print("Task",k,"returned with",err)
                 if coroutine.status(v.coroutine) == "dead" then
+                    --print("Task",k,v:getId(),"finished")
                     table.remove(self.tasks, k)
                     if k == 1 then
                         return true
@@ -312,6 +356,9 @@ function desynccClass:start(func)
     while #self.tasks > 0 do
         os.queueEvent("desyncc_tick")
         local event = { os.pullEventRaw() }
+        if event[1] ~= "desyncc_tick" then
+            --print("Got event: ", event[1])
+        end
         if event[1] == "terminate" then
             print("DesynCC: Terminating...")
             break
@@ -320,49 +367,43 @@ function desynccClass:start(func)
             local wait = v:getWaiting()
             if wait == nil then
                 if event[1] ~= "desyncc_tick" then
+                    --print("Queuing for task: ", k)
                     v:queueEvent(event)
                 end
-                local die = self:resumeTask(v:getId())
-                if die then
-                    error("Main task died")
-                end
             else
+                if event[1] ~= "desyncc_tick" then
+                    --print("Task",k,"is waiting for",textutils.serialise(wait))
+                end
                 if wait.typ == "task" then
                     if self:getTask(wait.id) == nil then
+                        v:queueEvent({ "desyncc_task_finished" })
                         if event[1] ~= "desyncc_tick" then
+                            --print("Queuing for task (waiting for task): ", k)
                             v:queueEvent(event)
-                        end
-                        v:clearWait()
-                        local die = self:resumeTask(v:getId())
-                        if die then
-                            error("Main task died")
                         end
                     end
                 elseif wait.typ == "promise" then
-                    local outcome = self:getPromise(wait.id):getOutcome()
-                    if outcome ~= nil then
-                        v:queueEvent({outcome})
+                    local outcome = { self:getPromise(wait.id):getOutcome() }
+                    if outcome[1] ~= nil then
+                        outcome[1] = "desyncc_promise_" .. outcome[1]
+                        v:queueEvent(outcome)
                         if event[1] ~= "desyncc_tick" then
+                            --print("Queuing for task (waiting for promise): ", k)
                             v:queueEvent(event)
-                        end
-                        v:clearWait()
-                        local die = self:resumeTask(v:getId())
-                        if die then
-                            error("Main task died")
                         end
                     end
                 elseif wait.typ == "event" then
                     if event[1] == wait.id then
                         if event[1] ~= "desyncc_tick" then
+                            --print("Queuing for task (waiting for event): ", k)
                             v:queueEvent(event)
-                        end
-                        v:clearWait()
-                        local die = self:resumeTask(v:getId())
-                        if die then
-                            error("Main task died")
                         end
                     end
                 end
+            end
+            local die = self:resumeTask(v:getId())
+            if die then
+                error("Main task died")
             end
         end
     end
