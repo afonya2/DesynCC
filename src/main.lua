@@ -278,7 +278,14 @@ function desyncc:new()
     local cls = self:super()
     cls.tasks = {}
     cls.promises = {}
+    cls.version = "1.0.0"
     return cls
+end
+
+--- Returns the version of DesynCC
+--- @return string
+function desyncc:getVersion()
+    return self.version
 end
 
 --- Creates a new promise
@@ -308,6 +315,9 @@ function desynccClass:promise(func)
         end,
         result = function ()
             return prom:getOutcome()
+        end,
+        id = function ()
+            return prom:getId(), prom:getTaskId()
         end
     }
 end
@@ -334,9 +344,19 @@ function desynccClass:async(func)
             end,
             status = function ()
                 return tsk:getStatus()
+            end,
+            id = function ()
+                return tsk:getId()
             end
         }
     end
+end
+
+--- Creates a task
+--- @param func function The function to execute in the task. function() end
+--- @return table The task control object
+function desynccClass:task(func)
+    return self:async(func)()
 end
 
 --- Finds a task with ID id
