@@ -208,6 +208,12 @@ end
 --- Resolves the promise
 --- @param ... any
 function promiseClass:resolve(...)
+    if self.resolved.is then
+        error("Promise is already resolved")
+    end
+    if self.rejected.is then
+        error("Promise is already rejected")
+    end
     self.resolved.is = true
     self.resolved.values = {...}
     for k, v in ipairs(self.afters) do
@@ -218,6 +224,12 @@ end
 --- Rejects the promise
 --- @param ... any
 function promiseClass:reject(...)
+    if self.resolved.is then
+        error("Promise is already resolved")
+    end
+    if self.rejected.is then
+        error("Promise is already rejected")
+    end
     self.rejected.is = true
     self.rejected.values = {...}
     if #self.catches < 1 then
@@ -242,8 +254,10 @@ function promiseClass:getTask()
             self:reject(...)
         end
         local ok, err = pcall(self.func, res, rej)
-        if not ok then
+        if (not ok) and (not (self.resolved.is or self.rejected.is)) then
             self:reject(err)
+        elseif not ok then
+            error(err)
         end
     end)
     self.taskId = tsk.id
