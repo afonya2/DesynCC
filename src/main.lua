@@ -42,6 +42,7 @@ function task:new(func)
         is = false,
         values = {}
     }
+    cls.isRunning = false
     return cls
 end
 
@@ -105,11 +106,17 @@ function taskClass:queueEvent(event)
 end
 
 --- Returns whatever the task function returned.
----@return table|nil The returned values of the task function or nil if the task hasn't returned yet
+---@return ... The returned values of the task function or nil if the task hasn't returned yet
 function taskClass:getReturned()
     if self.returned.is then
-        return self.returned.values
+        return table.unpack(self.returned.values)
     end
+end
+
+--- Returns the status of the task coroutine
+--- @return string
+function taskClass:getStatus()
+    return coroutine.status(self.coroutine)
 end
 
 --- Sets the returned values of the task function
@@ -289,17 +296,17 @@ function desynccClass:promise(func)
             prom:catch(...)
         end,
         await = function ()
-            self.tasks[1]:waitForPromise(prom:getId())
+            self:getRunningTask():waitForPromise(prom:getId())
             while true do
                 local data = { coroutine.yield() }
                 if data[1] == "desyncc_promise_resolved" then
-                    return table.unpack(data)
+                    return table.unpack(data, 2)
                 elseif data[1] == "desyncc_promise_rejected" then
                     error("Promise rejected: " .. table.concat(data, ", ", 2))
                 end
             end
         end,
-        getResult = function ()
+        result = function ()
             return prom:getOutcome()
         end
     }
@@ -307,9 +314,29 @@ end
 
 --- Creates a simple async function
 --- @param func function The function to execute. function() end
---- @return table The async function
+--- @return function The async function
 function desynccClass:async(func)
-    return {}
+    return function ()
+        local tsk = task:new(func)
+        table.insert(self.tasks, tsk)
+        return {
+            await = function ()
+                self:getRunningTask():waitForTask(tsk:getId())
+                while true do
+                    local data = { coroutine.yield() }
+                    if data[1] == "desyncc_task_finished" then
+                        return table.unpack(data, 2)
+                    end
+                end
+            end,
+            result = function ()
+                return tsk:getReturned()
+            end,
+            status = function ()
+                return tsk:getStatus()
+            end
+        }
+    end
 end
 
 --- Finds a task with ID id
@@ -337,13 +364,24 @@ function desynccClass:getPromise(id)
     end
 end
 
+--- Returns the currently running task. Or the main task if there is no running task. Or nil if there are no tasks at all.
+--- @return table|nil
+function desynccClass:getRunningTask()
+    for k, v in ipairs(self.tasks) do
+        if v.isRunning then
+            return v
+        end
+    end
+    return self.tasks[1]
+end
+
 --- Resumes a task
 --- @param id string The ID of the task to resume
 --- @return boolean Whether the main task died or not
 function desynccClass:resumeTask(id)
     for k, v in ipairs(self.tasks) do
         if v:getId() == id then
-            if v:getReturned() == nil then
+            if v:getStatus() == "suspended" then
                 local event = v:getNextEvent(false)
                 if event ~= nil then
                     --[[print("Events for task",k)
@@ -353,7 +391,9 @@ function desynccClass:resumeTask(id)
                     print("------------------")
                     print("Executing event", event[1], "for task",k)]]
                     v:clearWait()
+                    v.isRunning = true
                     local res = { coroutine.resume(v.coroutine, table.unpack(event)) }
+                    v.isRunning = false
                     if not res[1] then
                         error("Error in task " .. v.id .. ": " .. res[2])
                     end
@@ -393,7 +433,7 @@ function desynccClass:start(func)
             break
         end
         for k, v in ipairs(self.tasks) do
-            if v:getReturned() == nil then
+            if v:getStatus() == "suspended" then
                 local wait = v:getWaiting()
                 if wait == nil then
                     if event[1] ~= "desyncc_tick" then
@@ -405,8 +445,8 @@ function desynccClass:start(func)
                         --print("Task",k,"is waiting for",textutils.serialise(wait))
                     end
                     if wait.typ == "task" then
-                        local ret = v:getReturned()
-                        if ret ~= nil then
+                        if self:getTask(wait.id):getStatus() == "dead" then
+                            local ret = { self:getTask(wait.id):getReturned() }
                             v:queueEvent({ "desyncc_task_finished", table.unpack(ret) })
                             if event[1] ~= "desyncc_tick" then
                                 --print("Queuing for task (waiting for task): ", k)
