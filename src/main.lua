@@ -43,6 +43,7 @@ function task:new(func)
         values = {}
     }
     cls.isRunning = false
+    cls:queueEvent({ "desyncc_task_start" })
     return cls
 end
 
@@ -271,6 +272,7 @@ function promiseClass:catch(func)
 end
 
 local desyncc, desynccClass = class()
+desyncc.version = "1.0.0"
 
 --- Creates a new desyncc instance.
 --- @return table
@@ -278,7 +280,6 @@ function desyncc:new()
     local cls = self:super()
     cls.tasks = {}
     cls.promises = {}
-    cls.version = "1.0.0"
     return cls
 end
 
@@ -495,7 +496,7 @@ function desynccClass:start(func)
                 local die = self:resumeTask(v:getId())
                 if die then
                     error("Main task died")
-                end 
+                end
             end
         end
     end
