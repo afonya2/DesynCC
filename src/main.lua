@@ -294,6 +294,7 @@ function desyncc:new()
     local cls = self:super()
     cls.tasks = {}
     cls.promises = {}
+    cls.events = {}
     return cls
 end
 
@@ -420,6 +421,65 @@ function desynccClass:interval(func, interval)
     return tsk
 end
 
+--- Creates an event listener
+--- @param event string The event
+--- @param callback function The callback function to execute when the event is fired. function(...) end
+function desynccClass:on(event, callback)
+    if self.events[event] == nil then
+        self.events[event] = {}
+    end
+    table.insert(self.events[event], {
+        callback = callback,
+        once = false
+    })
+end
+
+--- Creates an event listener that fires only once
+--- @param event string The event
+--- @param callback function The callback function to execute when the event is fired. function(...) end
+function desynccClass:once(event, callback)
+    if self.events[event] == nil then
+        self.events[event] = {}
+    end
+    table.insert(self.events[event], {
+        callback = callback,
+        once = true
+    })
+end
+
+--- Removes an event listener
+--- @param event string The event
+--- @param callback function The callback function
+function desynccClass:off(event, callback)
+    if self.events[event] == nil then
+        return
+    end
+    for k, v in ipairs(self.events[event]) do
+        if v.callback == callback then
+            table.remove(self.events[event], k)
+            break
+        end
+    end
+end
+
+--- Fires the callback functions for the event in new tasks
+--- @param event string The event
+--- @param ... unknown The arguments to pass to the callback functions
+function desynccClass:call(event, ...)
+    if self.events[event] == nil then
+        return
+    end
+    for k, v in ipairs(self.events[event]) do
+        local tsk = task:new(v.callback)
+        tsk:clearEventQueue()
+        tsk:queueEvent({ ... })
+        table.insert(self.tasks, tsk)
+        if v.once then
+            table.remove(self.events[event], k)
+        end
+    end
+end
+
 --- Finds a task with ID id
 --- @param id string|nil The ID of the task, or nil to find the main task
 --- @return table|nil
@@ -508,6 +568,7 @@ function desynccClass:start(func)
         local event = { os.pullEventRaw() }
         if event[1] ~= "desyncc_tick" then
             --print("Got event: ", event[1])
+            self:call(table.unpack(event))
         end
         if event[1] == "terminate" then
             print("DesynCC: Terminating...")
