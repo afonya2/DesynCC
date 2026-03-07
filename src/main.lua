@@ -306,7 +306,7 @@ end
 
 --- Creates a new promise
 --- @param func function The function to execute to resolve the promise. function(resolve, reject) end
---- @return table The async function
+--- @return table The promise controller
 function desynccClass:promise(func)
     local prom = promise:new(func)
     table.insert(self.promises, prom)
@@ -332,6 +332,12 @@ function desynccClass:promise(func)
         result = function ()
             return prom:getOutcome()
         end,
+        status = function ()
+            local tsk = self:getTask(prom:getTaskId())
+            if tsk ~= nil then
+                return tsk:getStatus()
+            end
+        end,
         id = function ()
             return prom:getId(), prom:getTaskId()
         end
@@ -340,37 +346,23 @@ end
 
 --- Creates a simple async function
 --- @param func function The function to execute. function() end
---- @return function The async function
+--- @return function The promise controller
 function desynccClass:async(func)
     return function ()
-        local tsk = task:new(func)
-        table.insert(self.tasks, tsk)
-        return {
-            await = function ()
-                self:getRunningTask():waitForTask(tsk:getId())
-                while true do
-                    local data = { coroutine.yield() }
-                    if data[1] == "desyncc_task_finished" then
-                        return table.unpack(data, 2)
-                    end
-                end
-            end,
-            result = function ()
-                return tsk:getReturned()
-            end,
-            status = function ()
-                return tsk:getStatus()
-            end,
-            id = function ()
-                return tsk:getId()
+        return self:promise(function (res, rej)
+            local resp = { pcall(func) }
+            if resp[1] then
+                res(table.unpack(resp, 2))
+            else
+                rej(table.unpack(resp, 2))
             end
-        }
+        end)
     end
 end
 
 --- Creates a task
 --- @param func function The function to execute in the task. function() end
---- @return table The task control object
+--- @return table The promise controller
 function desynccClass:task(func)
     return self:async(func)()
 end
