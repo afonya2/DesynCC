@@ -61,7 +61,7 @@ print("DesynCC version: ", desyncc.getVersion())
 > All of the following functions are methods of a desyncc class. If you follow the example above, you need to call them with `sys:method(...)`.
 
 ### promise(func: function): Promise Controller
-Creates a new promise and returns controller functions for it. Used to create async functions that need to wait for something that's non-blocking like an event. See [events](#events)
+Creates a new promise and returns controller functions for it. Used to create async functions that need to wait for something that's non-blocking like an event. See [events](#onevent-string-func-function).
 > [!IMPORTANT]
 > If a promise is rejected without it having a .catch() function, it will throw an error. If a promise is resolved without it having a .after() function, it will do nothing. Awaiting for a promise that has been resolved will return the values passed to the resolve function. Awaiting for a promise that has been rejected will throw an error.
 
