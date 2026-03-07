@@ -64,6 +64,7 @@ print("DesynCC version: ", desyncc.getVersion())
 Creates a new promise and returns controller functions for it. Used to create async functions that need to wait for something that's non-blocking like an event. See [events](#events)
 > [!IMPORTANT]
 > If a promise is rejected without it having a .catch() function, it will throw an error. If a promise is resolved without it having a .after() function, it will do nothing. Awaiting for a promise that has been resolved will return the values passed to the resolve function. Awaiting for a promise that has been rejected will throw an error.
+
 > [!IMPORTANT]
 > Returning anything in the function body will do nothing. You must use the resolve and reject functions to resolve or reject the promise.
 
@@ -98,6 +99,7 @@ end
 Creates a new async function. An async function is just a function that returns a promise. If the function body returns, the promise gets resolved.
 > [!IMPORTANT]
 > If the function errors, the promise gets rejected. For functions that require waiting for non-blocking stuff, use the [promise](#taskfunc-function-promise-controller) function instead.
+
 > [!WARNING]
 > You should avoid returning a new promise inside the async function. If you need to do that, use the [promise](#taskfunc-function-promise-controller) function instead.
 
