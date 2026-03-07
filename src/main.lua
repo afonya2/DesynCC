@@ -31,7 +31,7 @@ function task:new(func)
     cls.id = tostring(time) .. "#" .. tostring(self.lastId+1)
     self.lastId = self.lastId + 1
     cls.coroutine = coroutine.create(func)
-    -- Defines if the task is waiting for a promise/other task/event
+    -- Defines if the task is waiting for a promise/other task/event/time
     cls.waitingFor = {
         is = false,
         typ = nil,
@@ -91,6 +91,16 @@ function taskClass:waitForEvent(id)
     }
 end
 
+--- Sets the task to wait until a given timestamp
+--- @param timestamp number The timestamp to wait until in milliseconds since the unix epoch
+function taskClass:waitForTime(timestamp)
+    self.waitingFor = {
+        is = true,
+        typ = "time",
+        id = tostring(timestamp)
+    }
+end
+
 --- Clears the wait state of the task
 function taskClass:clearWait()
     self.waitingFor = {
@@ -147,6 +157,10 @@ function taskClass:getNextEvent(noCheckWait)
             end
         elseif wait.typ == "event" then
             if v[1] == wait.id then
+                return table.remove(self.eventQueue, 1)
+            end
+        elseif wait.typ == "time" then
+            if v[1] == "desyncc_time_reached" then
                 return table.remove(self.eventQueue, 1)
             end
         end
@@ -360,6 +374,52 @@ function desynccClass:task(func)
     return self:async(func)()
 end
 
+--- Schedules func to run after the timeout
+---@param func function The function to run when the timeout is reached
+---@param timeout number The timeout in miliseconds
+--- @return table The timeout object
+function desynccClass:timeout(func, timeout)
+    return self:task(function ()
+        local time = os.epoch("utc") + timeout
+        self:getRunningTask():waitForTime(time)
+        while true do
+            local data = { coroutine.yield() }
+            if data[1] == "desyncc_time_reached" then
+                break
+            end
+        end
+        func()
+    end)
+end
+
+--- Schedules func to run periodically with the given interval
+---@param func function The function to run periodically with the given interval
+---@param interval number The interval in miliseconds
+--- @return table The interval object
+function desynccClass:interval(func, interval)
+    local removed = false
+    local tsk = self:task(function ()
+        while true do
+            local time = os.epoch("utc") + interval
+            self:getRunningTask():waitForTime(time)
+            while true do
+                local data = { coroutine.yield() }
+                if data[1] == "desyncc_time_reached" then
+                    break
+                end
+            end
+            if removed then
+                break
+            end
+            func()
+        end
+    end)
+    tsk.remove = function ()
+        removed = true
+    end
+    return tsk
+end
+
 --- Finds a task with ID id
 --- @param id string|nil The ID of the task, or nil to find the main task
 --- @return table|nil
@@ -488,6 +548,16 @@ function desynccClass:start(func)
                         if event[1] == wait.id then
                             if event[1] ~= "desyncc_tick" then
                                 --print("Queuing for task (waiting for event): ", k)
+                                v:queueEvent(event)
+                            end
+                        end
+                    elseif wait.typ == "time" then
+                        local time = os.epoch("utc")
+                        --print("Task",k,"waiting until",wait.id,"time is",time)
+                        if time >= tonumber(wait.id) then
+                            v:queueEvent({ "desyncc_time_reached" })
+                            if event[1] ~= "desyncc_tick" then
+                                --print("Queuing for task (waiting for time): ", k)
                                 v:queueEvent(event)
                             end
                         end
