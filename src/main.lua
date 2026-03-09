@@ -362,9 +362,10 @@ end
 --- @param func function The function to execute. function() end
 --- @return function The promise controller
 function desynccClass:async(func)
-    return function ()
+    return function (...)
+        local args = { ... }
         return self:promise(function (res, rej)
-            local resp = { pcall(func) }
+            local resp = { pcall(func, table.unpack(args)) }
             if resp[1] then
                 res(table.unpack(resp, 2))
             else

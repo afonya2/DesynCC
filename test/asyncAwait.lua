@@ -20,14 +20,14 @@ local desyncc = require("desyncc.main")
 
 local sys = desyncc:new()
 
-local testAsync = sys:async(function ()
+local testAsync = sys:async(function (a,b)
     os.sleep(5)
-    print("Hello, world!")
+    print(a,b)
     return "a", "b"
 end)
 
 local function main()
-    local as = testAsync()
+    local as = testAsync("Hello,", "world!")
     print(textutils.serialise(as.result()))
     print("Before the function is awaited")
     print(as.status())
