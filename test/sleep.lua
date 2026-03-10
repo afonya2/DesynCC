@@ -1,5 +1,5 @@
 --[[
-DesynCC Test - Taskless promise termination
+DesynCC Test - Sleep
 Copyright 2026 Afonya
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -14,26 +14,16 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMA
 
 package.path = "/?.lua;/?/init.lua;" .. package.path
 print("--------------")
-print("This test should create a promise that resolves when an event is called. However the promise gets terminated before the event is called. It should result in an error because the promise is already rejected.")
+print("This test should print 'Sleeping for 5 seconds...', then wait for ~5 seconds, then print 'Awake!'")
 print("--------------")
 local desyncc = require("desyncc.main")
 
 local sys = desyncc:new()
 
-local function testPromise()
-    return sys:promise(function (resolve, reject)
-        sys:once("test", function ()
-            resolve("Hello, world!")
-        end)
-    end)
-end
-
 local function main()
-    local prom = testPromise()
-    sys:sleep(1000)
-    prom.terminate()
-    sys:call("test")
-    sys:sleep(1000)
+    print("Sleeping for 5 seconds...")
+    sys:sleep(5000)
+    print("Awake!")
 end
 
 sys:start(main)

@@ -118,7 +118,7 @@ function taskClass:queueEvent(event)
 end
 
 --- Returns whatever the task function returned.
----@return ... The returned values of the task function or nil if the task hasn't returned yet
+--- @return ... The returned values of the task function or nil if the task hasn't returned yet
 function taskClass:getReturned()
     if self.returned.is then
         return table.unpack(self.returned.values)
@@ -135,7 +135,7 @@ function taskClass:getStatus()
 end
 
 --- Sets the returned values of the task function
----@param values table
+--- @param values table
 function taskClass:setReturned(values)
     if self.returned.is then
         error("Task already returned")
@@ -554,6 +554,18 @@ function desynccClass:getRunningTask()
         end
     end
     return self.tasks[1]
+end
+
+--- Pauses the execution of the current task for a given amount of time
+--- @param time number The time to sleep in milliseconds
+function desynccClass:sleep(time)
+    self:getRunningTask():waitForTime(os.epoch("utc") + time)
+    while true do
+        local data = { coroutine.yield() }
+        if data[1] == "desyncc_time_reached" then
+            break
+        end
+    end
 end
 
 --- Resumes a task

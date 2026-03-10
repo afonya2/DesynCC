@@ -272,6 +272,23 @@ local function main()
 end
 ```
 
+### sleep(time: number)
+Pauses the execution of the current task for a given amount of time
+
+**Parameters**
+- time: number: The time to sleep in milliseconds.
+
+**Outputs**
+
+**Example**
+```lua
+local function main()
+    print("Sleeping for 1 second...")
+    sys:sleep(1000) -- Sleep for 1 second
+    print("Awake!")
+end
+```
+
 ### start(func: function)
 Starts the main loop. The function passed to this function will be the main task. If the main task finishes, an error is thrown.
 **Parameters**
