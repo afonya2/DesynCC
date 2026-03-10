@@ -1,5 +1,5 @@
 --[[
-DesynCC Test Executor
+DesynCC Test - Awaited promise terminate test
 Copyright 2026 Afonya
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
@@ -12,14 +12,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ]]
 
-local files = fs.list("desyncc/test")
-for _, file in pairs(files) do
-    if file ~= "runTests.lua" then
-        print("Running test: " .. file)
-        -- Clear the even queue
-        os.queueEvent("testStart")
-        os.pullEvent("testStart")
-        shell.run("desyncc/test/" .. file)
-        os.sleep(2)
-    end
+package.path = "/?.lua;/?/init.lua;" .. package.path
+print("--------------")
+print("This test should start an async function, print 'start' then it should await for the promise. It should print 'Hello, world!' then it should terminate the function without any errors.")
+print("--------------")
+local desyncc = require("desyncc.main")
+
+local sys = desyncc:new()
+
+local testAsync = sys:async(function ()
+    os.sleep(5)
+    print("Hello, world!")
+end)
+
+local function main()
+    local as = testAsync()
+    print("start")
+    as.await()
+    as.terminate()
 end
+
+sys:start(main)

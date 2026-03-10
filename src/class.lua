@@ -47,8 +47,8 @@ local function class(extends)
 
     --- Creates a new class
     --- @return table The new class
-    function static:new()
-        return self:super()
+    function static:new(...)
+        return self:super(...)
     end
 
     --- Creates a new class internally. Constructors should call this function to create a new class instance.

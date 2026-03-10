@@ -43,6 +43,7 @@ function task:new(func)
         values = {}
     }
     cls.isRunning = false
+    cls.isTerminated = false
     cls:queueEvent({ "desyncc_task_start" })
     return cls
 end
@@ -127,14 +128,32 @@ end
 --- Returns the status of the task coroutine
 --- @return string
 function taskClass:getStatus()
+    if self.isTerminated then
+        return "dead"
+    end
     return coroutine.status(self.coroutine)
 end
 
 --- Sets the returned values of the task function
 ---@param values table
 function taskClass:setReturned(values)
+    if self.returned.is then
+        error("Task already returned")
+    end
     self.returned.is = true
     self.returned.values = values
+end
+
+--- Terminates the class
+--- @param values table
+function taskClass:terminate(values)
+    if self.isTerminated or self.returned.is then
+        error("Task is already terminated/finished")
+    end
+    self.isTerminated = true
+    self:setReturned(values)
+    self:clearEventQueue()
+    self:clearWait()
 end
 
 --- Gets the next event from the event queue of the task
@@ -351,6 +370,20 @@ function desynccClass:promise(func)
             if tsk ~= nil then
                 return tsk:getStatus()
             end
+        end,
+        terminate = function (...)
+            if prom:getOutcome() == nil then
+                prom:catch(function () end)
+                prom:reject("Terminated")
+            end
+            local tsk = self:getTask(prom:getTaskId())
+            if tsk == nil then
+                return
+            end
+            if tsk:getStatus() ~= "suspended" then
+                return
+            end
+            tsk:terminate({ ... })
         end,
         id = function ()
             return prom:getId(), prom:getTaskId()

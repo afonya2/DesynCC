@@ -34,6 +34,9 @@ local files = {
         ["test/promisePoll.lua"] = "desyncc/test/promisePoll.lua",
         ["test/event.lua"] = "desyncc/test/event.lua",
         ["test/eventOnce.lua"] = "desyncc/test/eventOnce.lua",
+        ["test/terminate.lua"] = "desyncc/test/terminate.lua",
+        ["test/terminateAwait.lua"] = "desyncc/test/terminateAwait.lua",
+        ["test/terminateNoTask.lua"] = "desyncc/test/terminateNoTask.lua",
     }
 }
 

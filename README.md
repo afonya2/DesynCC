@@ -68,6 +68,9 @@ Creates a new promise and returns controller functions for it. Used to create as
 > [!IMPORTANT]
 > Returning anything in the function body will do nothing. You must use the resolve and reject functions to resolve or reject the promise.
 
+> [!DANGER]
+> If the promise gets terminated while it's waiting for a non-blocking event, an error will be thrown when the event wants to resolve the promise. This is because the promise will already be rejected.
+
 **Parameters**
 - func: function: The function to execute to resolve the promise.
 
@@ -78,6 +81,7 @@ Creates a new promise and returns controller functions for it. Used to create as
     - .await(): Used to wait for the promise to be resolved or rejected. If the promise is resolved, it returns the values passed to the resolve function. If the promise is rejected, it throws an error.
     - .result(): Used to get the result(s) of the promise. It returns "resolved"/"rejected" as the first value, and then the values passed to the resolve/reject function. If the promise is not yet resolved or rejected, it returns nil.
     - .status(): Used to get the coroutine status of the promise's task. It returns "running", "suspended", or "dead". If the task cannot be found, it returns nil.
+    - .terminate(...): Used to terminate a promise. The promise gets rejected with "Terminated" as the message. It is not necessary to add a catch function to this promise, because the error won't be thrown. If the task of the promise is still alive it forcefully terminates it and sets it's returned values to the values passed to this function. If the task is already dead, it does nothing. The task of the promise cannot terminate itself. But it will still reject the promise.
     - .id(): Used to get the id of the promise.
 
 **Example**
@@ -90,7 +94,7 @@ end
 
 local function main()
     local promise = asyncFunc()
-    local result = promise:await()
+    local result = promise.await()
     print("Got result: ", result)
 end
 ```
@@ -118,7 +122,7 @@ end)
 
 local function main()
     local promise = asyncFunc()
-    local result = promise:await()
+    local result = promise.await()
     print("Got result: ", result)
 end
 ```
