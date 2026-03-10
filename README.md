@@ -68,7 +68,7 @@ Creates a new promise and returns controller functions for it. Used to create as
 > [!IMPORTANT]
 > Returning anything in the function body will do nothing. You must use the resolve and reject functions to resolve or reject the promise.
 
-> [!DANGER]
+> [!CAUTION]
 > If the promise gets terminated while it's waiting for a non-blocking event, an error will be thrown when the event wants to resolve the promise. This is because the promise will already be rejected.
 
 **Parameters**
@@ -273,7 +273,7 @@ end
 ```
 
 ### sleep(time: number)
-Pauses the execution of the current task for a given amount of time
+Pauses the execution of the current task for a given amount of time.
 
 **Parameters**
 - time: number: The time to sleep in milliseconds.
