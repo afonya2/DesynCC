@@ -319,7 +319,7 @@ function promiseClass:catch(func)
 end
 
 local desyncc, desynccClass = class()
-desyncc.version = "1.0.0"
+desyncc.version = "1.1.0"
 
 --- Creates a new desyncc instance.
 --- @return table
